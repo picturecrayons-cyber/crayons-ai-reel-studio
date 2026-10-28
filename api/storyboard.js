@@ -9,10 +9,19 @@ function send(res, status, body) {
 
 function isQuotaError(status, body) {
   const message = String(body?.error?.message || '').toLowerCase();
-  return status === 429 || status === 503 ||
+  const statusCode = String(body?.error?.status || '').toLowerCase();
+  return status === 429 ||
+    statusCode === 'resource_exhausted' ||
     message.includes('resource_exhausted') ||
     message.includes('quota') ||
     message.includes('rate limit');
+}
+
+function getClientKey(req) {
+  // Prefer the platform-provided client address; do not trust arbitrary forwarded
+  // values beyond the first entry supplied by the hosting proxy.
+  return String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown')
+    .split(',')[0].trim().slice(0, 100);
 }
 
 export default async function handler(req, res) {
@@ -23,17 +32,18 @@ export default async function handler(req, res) {
 
   const origin = req.headers.origin;
   const host = req.headers.host;
-  if (origin && host) {
-    try {
-      if (new URL(origin).host !== host) {
-        return send(res, 403, { code: 'ORIGIN_REJECTED', message: 'Cross-origin requests are not accepted.' });
-      }
-    } catch {
-      return send(res, 403, { code: 'ORIGIN_REJECTED', message: 'Invalid request origin.' });
+  if (!origin || !host) {
+    return send(res, 403, { code: 'ORIGIN_REQUIRED', message: 'A same-origin browser request is required.' });
+  }
+  try {
+    if (new URL(origin).host !== host) {
+      return send(res, 403, { code: 'ORIGIN_REJECTED', message: 'Cross-origin requests are not accepted.' });
     }
+  } catch {
+    return send(res, 403, { code: 'ORIGIN_REJECTED', message: 'Invalid request origin.' });
   }
 
-  const ip = String(req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  const ip = getClientKey(req);
   const now = Date.now();
   const recent = (hits.get(ip) || []).filter((time) => now - time < 60_000);
   if (recent.length >= 10) {
@@ -78,7 +88,7 @@ export default async function handler(req, res) {
             `Create a 3-scene vertical social reel storyboard for this idea: ${prompt}\n` +
             'Return only JSON: {"scenes":[{"title":"...","caption":"...","visual":"...","seconds":5}]}.' +
             ' Each scene must have a short caption and visual description. Keep it safe, original, and concise.'
-          }]}],
+          ]}]}],
           generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 900 }
         })
       });
@@ -92,7 +102,7 @@ export default async function handler(req, res) {
         lastQuota = true;
         continue;
       }
-      // Never try another model after auth/config errors or unknown failures.
+      // Do not model-fallback on auth/config errors, outages, or unknown failures.
       return send(res, upstream.status >= 500 ? 503 : 502, {
         code: 'AI_PROVIDER_ERROR',
         message: 'The free AI provider rejected the request. No paid fallback was attempted.'
@@ -102,7 +112,7 @@ export default async function handler(req, res) {
     const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
     let parsed;
     try {
-      const cleaned = text.trim().replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
+      const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       parsed = JSON.parse(cleaned);
     } catch {
       return send(res, 502, { code: 'INVALID_AI_OUTPUT', message: 'Free AI returned an unreadable storyboard. Try again.' });
