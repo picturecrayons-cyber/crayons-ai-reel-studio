@@ -1,4 +1,4 @@
-name: Build verification
+name: Build and API tests
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,4 +18,5 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-audit --no-fund
+      - run: npm test
       - run: npm run build
