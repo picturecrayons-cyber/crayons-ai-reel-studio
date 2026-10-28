@@ -88,7 +88,7 @@ export default async function handler(req, res) {
             `Create a 3-scene vertical social reel storyboard for this idea: ${prompt}\n` +
             'Return only JSON: {"scenes":[{"title":"...","caption":"...","visual":"...","seconds":5}]}.' +
             ' Each scene must have a short caption and visual description. Keep it safe, original, and concise.'
-          ]}]}],
+          }]}],
           generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens: 900 }
         })
       });
