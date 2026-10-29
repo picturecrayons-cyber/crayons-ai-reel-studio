@@ -1,7 +1,7 @@
 {
   "name": "crayons-ai-reel-studio",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@huggingface/inference": "4.7.1",
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "react": "latest",
